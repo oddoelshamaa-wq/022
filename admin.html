@@ -87,8 +87,6 @@
         </h2>
         <div class="menu-item active" onclick="nav('live-orders')"><i class="fas fa-bell"></i> الطلبات الحية</div>
         <div class="menu-item" onclick="nav('dashboard')"><i class="fas fa-chart-line"></i> السجل والإحصائيات</div>
-        
-        <!-- تم نقل إدارة المنتجات هنا لتظهر للمتلقي أيضاً -->
         <div class="menu-item" onclick="nav('manage-products')"><i class="fas fa-boxes"></i> إدارة المنتجات</div>
         
         <div class="admin-only">
@@ -183,10 +181,23 @@
                 </div>
                 <button class="btn-blue" style="width:100%" id="saveProdBtn">حفظ</button>
             </div>
-            <div class="form-box">
-                <h3>إضافة تصنيف</h3>
-                <input type="text" id="catMain" placeholder="اسم التصنيف">
-                <button class="btn-blue" id="addCatBtn">إضافة</button>
+            
+            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                <!-- إضافة تصنيف -->
+                <div class="form-box" style="flex: 1;">
+                    <h3>إضافة تصنيف</h3>
+                    <input type="text" id="catMain" placeholder="اسم التصنيف">
+                    <button class="btn-blue" id="addCatBtn">إضافة</button>
+                </div>
+                
+                <!-- إدارة التصنيفات (جديد) -->
+                <div class="form-box" style="flex: 1;">
+                    <h3>إدارة التصنيفات</h3>
+                    <table class="users-table">
+                        <thead><tr><th>التصنيف</th><th>إجراءات</th></tr></thead>
+                        <tbody id="manageCatsList"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -338,7 +349,14 @@
                 renderUsers(allUsersData);
             });
             onValue(ref(db, 'products'), (s) => renderProdManage(s.val() || {}));
-            onValue(ref(db, 'categories'), (s) => populateCats(s.val() || {}));
+            
+            // تم التعديل هنا: قراءة التصنيفات وتعبئة القائمة + جدول الإدارة
+            onValue(ref(db, 'categories'), (s) => {
+                const cats = s.val() || {};
+                populateCats(cats);
+                renderCatManage(cats);
+            });
+
             onValue(ref(db, 'chats'), (s) => handleChatUpdate(s.val() || {}));
         }
 
@@ -580,6 +598,44 @@
         function populateCats(data) { const s=document.getElementById('prodCatSelect'); s.innerHTML='<option value="" disabled selected>اختر</option>'; Object.values(data).forEach(c=>s.innerHTML+=`<option value="${c.name}">${c.name}</option>`); }
         function renderProdManage(data) { document.getElementById('manageProdList').innerHTML=Object.entries(data).map(([k,p])=>`<tr><td>${p.name}</td><td>${p.available?'متاح':'مغلق'}</td><td><button class="btn-blue" onclick="window.tog('${k}',${p.available})">تغيير</button><button class="btn-red" onclick="window.delP('${k}')">حذف</button></td></tr>`).join(''); }
         window.tog=(k,s)=>update(ref(db,'products/'+k),{available:!s}); window.delP=(k)=>confirm('حذف؟')&&remove(ref(db,'products/'+k));
+
+        // --- New Functions for Categories ---
+        function renderCatManage(data) {
+            const tbody = document.getElementById('manageCatsList');
+            tbody.innerHTML = '';
+            if(!data || Object.keys(data).length === 0) {
+                tbody.innerHTML = '<tr><td colspan="2">لا توجد تصنيفات</td></tr>';
+                return;
+            }
+            Object.entries(data).forEach(([key, cat]) => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${cat.name}</td>
+                        <td>
+                            <button class="btn-warning" onclick="window.editCat('${key}', '${cat.name}')">تعديل</button>
+                            <button class="btn-red" onclick="window.delCat('${key}')">حذف</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        window.delCat = function(key) {
+            if(confirm('هل أنت متأكد من حذف هذا التصنيف؟')) {
+                remove(ref(db, 'categories/' + key))
+                .then(() => alert('تم الحذف'))
+                .catch(err => alert('خطأ: ' + err));
+            }
+        }
+
+        window.editCat = function(key, oldName) {
+            let newName = prompt("اسم التصنيف الجديد:", oldName);
+            if(newName && newName !== oldName) {
+                update(ref(db, 'categories/' + key), { name: newName })
+                .then(() => alert('تم التعديل'))
+                .catch(err => alert('خطأ: ' + err));
+            }
+        }
     </script>
 </body>
 </html>
