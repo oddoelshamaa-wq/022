@@ -64,6 +64,8 @@
         .clickable-row { cursor: pointer; transition: background 0.2s; }
         .clickable-row:hover { background-color: #f1f1f1; }
         .reason-box { background: #ffebee; color: #b71c1c; padding: 15px; margin: 15px 0; border-radius: 5px; border: 1px solid #ffcdd2; }
+        .variant-tag { display: inline-block; background: #e3f2fd; color: #1565c0; padding: 5px 10px; margin: 2px; border-radius: 15px; font-size: 0.9rem; border: 1px solid #bbdefb; }
+
     </style>
 </head>
 <body>
@@ -162,40 +164,51 @@
             </div>
         </div>
 
-        <!-- 4. Products -->
+        <!-- 4. Products & Categories -->
         <div id="products" class="section">
             <div class="form-box">
-                <h3>إضافة منتج/عرض</h3>
-                <label>الاسم</label><input type="text" id="prodName">
+                <h3>إضافة منتج جديد</h3>
+                <label>اسم المنتج</label><input type="text" id="prodName">
                 <label>رابط الصورة</label><input type="text" id="prodImg">
-                <label>التصنيف</label><select id="prodCatSelect"></select>
+                <label>التصنيف</label>
+                <!-- هذا هو القائمة التي ستظهر فيها التصنيفات -->
+                <select id="prodCatSelect"><option disabled selected>جار التحميل...</option></select>
+                
                 <div style="background:#f0f8ff; padding:15px; margin:15px 0; border:1px solid #bddfff; border-radius:5px;">
-                    <h4 style="margin-top:0; color:var(--blue);">الخيارات</h4>
+                    <h4 style="margin-top:0; color:var(--blue);">الخيارات (Variants)</h4>
                     <div style="display:flex; gap:10px;">
-                        <input type="text" id="vType" placeholder="الوصف" style="flex:2;">
-                        <input type="text" id="vSize" placeholder="الحجم" style="flex:1;">
+                        <input type="text" id="vType" placeholder="النوع (مثال: عيش بلدي)" style="flex:2;">
+                        <input type="text" id="vSize" placeholder="الحجم (مثال: كبير)" style="flex:1;">
                         <input type="number" id="vPrice" placeholder="السعر" style="flex:1;">
                     </div>
-                    <button class="btn-blue" style="background:var(--green); width:auto;" id="addVarBtn">إضافة</button>
+                    <button class="btn-blue" style="background:var(--green); width:auto;" id="addVarBtn">إضافة خيار</button>
                     <div id="tempVarsDisplay" style="margin-top:15px;"></div>
                 </div>
-                <button class="btn-blue" style="width:100%" id="saveProdBtn">حفظ</button>
+                <button class="btn-blue" style="width:100%" id="saveProdBtn">حفظ المنتج</button>
             </div>
-            
+
+            <!-- قسم التصنيفات: إضافة وإدارة -->
             <div style="display: flex; gap: 20px; flex-wrap: wrap;">
                 <!-- إضافة تصنيف -->
                 <div class="form-box" style="flex: 1;">
-                    <h3>إضافة تصنيف</h3>
+                    <h3>إضافة تصنيف جديد</h3>
                     <input type="text" id="catMain" placeholder="اسم التصنيف">
                     <button class="btn-blue" id="addCatBtn">إضافة</button>
                 </div>
                 
-                <!-- إدارة التصنيفات (جديد) -->
+                <!-- إدارة التصنيفات (تعديل وحذف) -->
                 <div class="form-box" style="flex: 1;">
-                    <h3>إدارة التصنيفات</h3>
+                    <h3>إدارة التصنيفات الحالية</h3>
                     <table class="users-table">
-                        <thead><tr><th>التصنيف</th><th>إجراءات</th></tr></thead>
-                        <tbody id="manageCatsList"></tbody>
+                        <thead>
+                            <tr>
+                                <th>اسم التصنيف</th>
+                                <th>إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="manageCatsList">
+                            <!-- سيتم تعبئة هذا الجدول تلقائياً -->
+                        </tbody>
                     </table>
                 </div>
             </div>
@@ -307,7 +320,6 @@
                 if(found) {
                     currentUser = found;
                     localStorage.setItem('nagaf_staff_user', JSON.stringify(found));
-
                     document.getElementById('loginScreen').style.display = 'none';
                     document.getElementById('adminNameDisplay').innerText = found.name;
                     if(found.role === 'receiver') {
@@ -350,14 +362,62 @@
             });
             onValue(ref(db, 'products'), (s) => renderProdManage(s.val() || {}));
             
-            // تم التعديل هنا: قراءة التصنيفات وتعبئة القائمة + جدول الإدارة
+            // --- هنا الربط بين القائمة المنسدلة وجدول التعديل ---
             onValue(ref(db, 'categories'), (s) => {
                 const cats = s.val() || {};
-                populateCats(cats);
-                renderCatManage(cats);
+                populateCats(cats);      // يعبئ القائمة المنسدلة (الصورة اللي بعتها)
+                renderCatManage(cats);   // يعبئ جدول الحذف والتعديل
             });
 
             onValue(ref(db, 'chats'), (s) => handleChatUpdate(s.val() || {}));
+        }
+
+        // --- Categories Logic (Fix for Dropdown) ---
+        function populateCats(data) { 
+            const s = document.getElementById('prodCatSelect'); 
+            s.innerHTML = '<option value="" disabled selected>اختر التصنيف</option>'; 
+            Object.values(data).forEach(c => {
+                s.innerHTML += `<option value="${c.name}">${c.name}</option>`;
+            }); 
+        }
+
+        function renderCatManage(data) {
+            const tbody = document.getElementById('manageCatsList');
+            tbody.innerHTML = '';
+            if(!data || Object.keys(data).length === 0) {
+                tbody.innerHTML = '<tr><td colspan="2">لا توجد تصنيفات</td></tr>';
+                return;
+            }
+            Object.entries(data).forEach(([key, cat]) => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${cat.name}</td>
+                        <td>
+                            <button class="btn-warning" onclick="window.editCat('${key}', '${cat.name}')">تعديل</button>
+                            <button class="btn-red" onclick="window.delCat('${key}')">حذف</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        // حذف التصنيف
+        window.delCat = function(key) {
+            if(confirm('هل أنت متأكد من حذف هذا التصنيف؟ سيختفي من القائمة.')) {
+                remove(ref(db, 'categories/' + key))
+                .then(() => alert('تم الحذف بنجاح'))
+                .catch(err => alert('خطأ: ' + err));
+            }
+        }
+
+        // تعديل التصنيف
+        window.editCat = function(key, oldName) {
+            let newName = prompt("اسم التصنيف الجديد:", oldName);
+            if(newName && newName !== oldName) {
+                update(ref(db, 'categories/' + key), { name: newName })
+                .then(() => alert('تم التعديل، ستتحدث القائمة تلقائياً'))
+                .catch(err => alert('خطأ: ' + err));
+            }
         }
 
         // --- Orders Logic ---
@@ -592,50 +652,38 @@
         }
         window.loadChat = (p) => { activeChatUser = p; onValue(ref(db,'chats/'+p), s => { document.getElementById('adminChatBox').innerHTML = Object.values(s.val()||{}).map(m=>`<div style="background:${m.sender==='admin'?'var(--blue)':'#ddd'};color:${m.sender==='admin'?'white':'black'};padding:8px;margin:5px;width:fit-content;border-radius:5px;align-self:${m.sender==='admin'?'flex-end':'flex-start'}">${m.text}</div>`).join(''); }); }
         window.sendAdminMsg = () => { let t=document.getElementById('adminChatInput').value; if(t&&activeChatUser){ push(ref(db,'chats/'+activeChatUser),{sender:'admin',text:t, timestamp:Date.now()}); document.getElementById('adminChatInput').value=''; } };
-        document.getElementById('addVarBtn').addEventListener('click', () => { let b=document.getElementById('vType').value, s=document.getElementById('vSize').value, p=document.getElementById('vPrice').value; if(b && p) { tempVariants.push({bread:b,size:s||'موحد',price:parseInt(p)}); document.getElementById('tempVarsDisplay').innerHTML += `<span class="variant-tag">${b} (${s||'موحد'}) : ${p}ج</span>`; document.getElementById('vType').value=''; document.getElementById('vSize').value=''; document.getElementById('vPrice').value=''; } });
-        document.getElementById('saveProdBtn').addEventListener('click', () => { let n=document.getElementById('prodName').value, i=document.getElementById('prodImg').value, c=document.getElementById('prodCatSelect').value; if(n && tempVariants.length) { push(ref(db,'products'),{name:n,img:i,cat:c,variants:tempVariants,available:true}); alert('تم'); tempVariants=[]; document.getElementById('prodName').value=''; document.getElementById('tempVarsDisplay').innerHTML=''; } });
-        document.getElementById('addCatBtn').addEventListener('click', () => { let n=document.getElementById('catMain').value; if(n){ push(ref(db,'categories'),{name:n}); alert('تم'); } });
-        function populateCats(data) { const s=document.getElementById('prodCatSelect'); s.innerHTML='<option value="" disabled selected>اختر</option>'; Object.values(data).forEach(c=>s.innerHTML+=`<option value="${c.name}">${c.name}</option>`); }
+        
+        // --- Product & Variant Logic ---
+        document.getElementById('addVarBtn').addEventListener('click', () => { 
+            let b=document.getElementById('vType').value, s=document.getElementById('vSize').value, p=document.getElementById('vPrice').value; 
+            if(b && p) { 
+                tempVariants.push({bread:b,size:s||'موحد',price:parseInt(p)}); 
+                document.getElementById('tempVarsDisplay').innerHTML += `<span class="variant-tag">${b} (${s||'موحد'}) : ${p}ج</span>`; 
+                document.getElementById('vType').value=''; document.getElementById('vSize').value=''; document.getElementById('vPrice').value=''; 
+            } 
+        });
+
+        document.getElementById('saveProdBtn').addEventListener('click', () => { 
+            let n=document.getElementById('prodName').value, i=document.getElementById('prodImg').value, c=document.getElementById('prodCatSelect').value; 
+            if(n && tempVariants.length) { 
+                push(ref(db,'products'),{name:n,img:i,cat:c,variants:tempVariants,available:true}); 
+                alert('تم حفظ المنتج'); 
+                tempVariants=[]; 
+                document.getElementById('prodName').value=''; 
+                document.getElementById('tempVarsDisplay').innerHTML=''; 
+            } else {
+                alert('يرجى إدخال اسم المنتج وإضافة خيار واحد على الأقل');
+            }
+        });
+
+        document.getElementById('addCatBtn').addEventListener('click', () => { 
+            let n=document.getElementById('catMain').value; 
+            if(n){ push(ref(db,'categories'),{name:n}); alert('تمت إضافة التصنيف'); document.getElementById('catMain').value=''; } 
+        });
+
         function renderProdManage(data) { document.getElementById('manageProdList').innerHTML=Object.entries(data).map(([k,p])=>`<tr><td>${p.name}</td><td>${p.available?'متاح':'مغلق'}</td><td><button class="btn-blue" onclick="window.tog('${k}',${p.available})">تغيير</button><button class="btn-red" onclick="window.delP('${k}')">حذف</button></td></tr>`).join(''); }
         window.tog=(k,s)=>update(ref(db,'products/'+k),{available:!s}); window.delP=(k)=>confirm('حذف؟')&&remove(ref(db,'products/'+k));
 
-        // --- New Functions for Categories ---
-        function renderCatManage(data) {
-            const tbody = document.getElementById('manageCatsList');
-            tbody.innerHTML = '';
-            if(!data || Object.keys(data).length === 0) {
-                tbody.innerHTML = '<tr><td colspan="2">لا توجد تصنيفات</td></tr>';
-                return;
-            }
-            Object.entries(data).forEach(([key, cat]) => {
-                tbody.innerHTML += `
-                    <tr>
-                        <td>${cat.name}</td>
-                        <td>
-                            <button class="btn-warning" onclick="window.editCat('${key}', '${cat.name}')">تعديل</button>
-                            <button class="btn-red" onclick="window.delCat('${key}')">حذف</button>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-
-        window.delCat = function(key) {
-            if(confirm('هل أنت متأكد من حذف هذا التصنيف؟')) {
-                remove(ref(db, 'categories/' + key))
-                .then(() => alert('تم الحذف'))
-                .catch(err => alert('خطأ: ' + err));
-            }
-        }
-
-        window.editCat = function(key, oldName) {
-            let newName = prompt("اسم التصنيف الجديد:", oldName);
-            if(newName && newName !== oldName) {
-                update(ref(db, 'categories/' + key), { name: newName })
-                .then(() => alert('تم التعديل'))
-                .catch(err => alert('خطأ: ' + err));
-            }
-        }
     </script>
 </body>
 </html>
